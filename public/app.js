@@ -85,10 +85,10 @@ async function notify(title, body) {
 function getStored() {
   try {
     return {
-      matters: localStorage.getItem('matters') || '1/12, 8/34, 14/19',
+      matters: localStorage.getItem('matters') || '',
       threshold: Number(localStorage.getItem('threshold') || '5')
     };
-  } catch { return { matters: '1/12, 8/34, 14/19', threshold: 5 }; }
+  } catch { return { matters: '', threshold: 5 }; }
 }
 
 function setStored({ matters, threshold }) {
@@ -252,6 +252,11 @@ testBtn.addEventListener('click', async () => {
   try {
     if (!lastBoard) lastBoard = await fetchBoard();
     const matters = parseMatters(mattersEl.value);
+    
+    if (!matters.length) {
+      alert('Enter at least one matter in the textbox (e.g., 1/12) and press Save, then try Test again.');
+      return;
+    }
     const threshold = Math.max(1, Number(thresholdEl.value) || 5);
 
     // simulate stepwise notifications at 1s intervals
