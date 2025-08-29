@@ -1,0 +1,48 @@
+:root { --bg:#f6f7fb; --fg:#0a0a0a; --card:#fff; --muted:#6b7280; --border:#e5e7eb; }
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+.container{max-width:960px;margin:24px auto;padding:0 16px}
+h1{margin:0 0 12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin:12px 0}
+label{display:block;font-size:14px;margin-bottom:6px}
+textarea{width:100%;min-height:90px;padding:8px;border:1px solid var(--border);border-radius:8px}
+input[type=number]{width:100%;padding:8px;border:1px solid var(--border);border-radius:8px}
+.row{display:flex;gap:12px;align-items:flex-end;margin-top:10px}
+.row>div{flex:1}
+.actions{display:flex;gap:8px;justify-content:flex-end}
+button{padding:8px 12px;border:1px solid var(--border);background:#111827;color:#fff;border-radius:8px;cursor:pointer}
+button#clear{background:#6b7280}
+small{color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.tile{border:1px solid var(--border);border-radius:10px;padding:10px}
+.tile .head{display:flex;justify-content:space-between;font-weight:600}
+.tile .meta{font-size:12px;color:var(--muted)}
+.tile details{font-size:12px;margin-top:6px}
+.foot{font-size:12px;color:var(--muted);text-align:center;margin:20px 0}
+
+.ticker{overflow:hidden;white-space:nowrap;background:#0b1320;color:#fff;border-radius:12px;margin:12px 0}
+.ticker .inner{display:inline-block;padding:8px 0; padding-left:100%; animation:ticker 35s linear infinite}
+@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
+
+
+/* Touch-friendly sizes, prevent iOS zoom-on-focus */
+button { min-height: 44px; }
+input[type=number], textarea { font-size: 16px; }
+
+/* Responsive layout: single column on phones, two on tablets, three on desktop */
+@media (max-width: 600px) {
+  .row { flex-direction: column; align-items: stretch; }
+  .actions { justify-content: stretch; flex-wrap: wrap; }
+  .actions button { width: 100%; }
+  .grid { grid-template-columns: 1fr; }
+}
+@media (min-width: 601px) and (max-width: 1024px) {
+  .grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 1025px) {
+  .grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Ticker: respect reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .ticker .inner { animation: none; transform: translateX(0); padding-left: 0; }
+}

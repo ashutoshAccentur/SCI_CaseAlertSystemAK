@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SC Noticeboard Alerts</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b1320" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>SC Noticeboard Alerts</h1>
+
+    <section class="ticker">
+        <div class="inner" id="ticker">Loading sequence…</div>
+    </section>
+
+    <section class="card">
+      <label>Enter matters (court/item), comma or new line separated</label>
+      <textarea id="matters" placeholder="1/12, 8/34, 14/19"></textarea>
+
+      <div class="row">
+        <div>
+          <label>Pre-alert (items before)</label>
+          <input id="threshold" type="number" min="1" max="10" value="5">
+        </div>
+        <div class="actions">
+          <button id="save">Save</button>
+          <button id="clear">Clear</button>
+          <button id="test">Test alerts (simulate)</button>
+
+        </div>
+      </div>
+
+      <small>Notifications fire at each step in the pre-alert window and at your item. Allow notifications when prompted.</small>
+    </section>
+
+    <section class="card">
+      <h2>Your Alerts</h2>
+      <div id="alerts" class="grid"></div>
+    </section>
+
+    <section class="card">
+      <h2>Live Courts</h2>
+      <div id="courts" class="grid"></div>
+    </section>
+
+    <footer class="foot">
+      Updated: <span id="updated">—</span>
+    </footer>
+  </main>
+
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(console.error);
+      });
+    }
+  </script>
+  <script src="/app.js"></script>
+</body>
+</html>
