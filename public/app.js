@@ -1,5 +1,4 @@
-const tickerEl = document.getElementById('ticker');
-
+// public/app.js
 const $ = (sel) => document.querySelector(sel);
 const mattersEl = $('#matters');
 const thresholdEl = $('#threshold');
@@ -8,12 +7,81 @@ const courtsEl = $('#courts');
 const updatedEl = $('#updated');
 const saveBtn = $('#save');
 const clearBtn = $('#clear');
-let lastBoard = null;
-
+const testBtn = document.getElementById('test');
 
 const fired = new Set(); // dedupe notifications per court-item
 let pollTimer = null;
+let lastBoard = null;    // keep the latest board for testing
 
+// --- Audio (tone) ---
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
+}
+function beep(durationMs = 450, freq = 880) {
+  try {
+    if (!audioCtx) return;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.value = freq;
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+    o.start(now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + durationMs / 1000);
+    o.stop(now + durationMs / 1000);
+  } catch {}
+}
+function vibrate(pattern = [180, 90, 180]) {
+  if (navigator.vibrate) {
+    try { navigator.vibrate(pattern); } catch {}
+  }
+}
+
+// --- Notifications ---
+async function ensurePermission() {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  const p = await Notification.requestPermission();
+  return p === 'granted';
+}
+
+// Prefer service worker notifications (more native options: vibrate, badge)
+async function showNativeNotification(title, body) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    await reg.showNotification(title, {
+      body,
+      tag: title,               // merges repeats
+      renotify: true,
+      requireInteraction: false,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      vibrate: [120, 60, 120]
+    });
+  } catch {
+    // fallback to window Notification
+    try { new Notification(title, { body }); } catch {}
+  }
+}
+
+async function notify(title, body) {
+  const ok = await ensurePermission();
+  if (!ok) return;
+  // play tone + vibration in page (works even if notification shows)
+  ensureAudio(); beep(); vibrate();
+  // trigger native OS notification
+  showNativeNotification(title, body);
+}
+
+// --- Storage & parsing ---
 function getStored() {
   try {
     return {
@@ -55,12 +123,7 @@ function preAlertWindow(seq, target, nBefore) {
   return arr;
 }
 
-function notify(title, body) {
-  if (!('Notification' in window)) return;
-  if (Notification.permission !== 'granted') return;
-  try { new Notification(title, { body }); } catch {}
-}
-
+// --- Fetch & render ---
 async function fetchBoard() {
   const res = await fetch('/api/board', { cache: 'no-store' });
   if (!res.ok) throw new Error('board fetch failed');
@@ -98,11 +161,12 @@ function renderAlerts(matters, data, threshold) {
   alertsEl.innerHTML = '';
   matters.forEach(m => {
     const row = data.courts[m.court];
-    let current = row ? row.current : null;
+    const current = row ? row.current : null;
     const seq = row ? row.sequence : [];
     const windowList = preAlertWindow(seq, m.item, threshold);
+
     let status = 'Waiting for session';
-    let distance = undefined;
+    let distance;
 
     if (current != null) {
       const idxInWindow = windowList.indexOf(current);
@@ -146,8 +210,12 @@ async function loop() {
   try {
     const data = await fetchBoard();
     lastBoard = data;
-    tickerEl.textContent = data.tickerText || '—';
     updatedEl.textContent = data.updatedAt || new Date().toLocaleString();
+
+    // Update ticker if present
+    const tickerEl = document.getElementById('ticker');
+    if (tickerEl) tickerEl.textContent = data.tickerText || '—';
+
     const matters = parseMatters(mattersEl.value);
     const threshold = Math.max(1, Number(thresholdEl.value) || 5);
     renderCourts(data);
@@ -159,38 +227,9 @@ async function loop() {
   }
 }
 
-// Simulate alerts quickly using the latest fetched sequence + threshold
-document.getElementById('test').addEventListener('click', async () => {
-  if (!lastBoard) { console.warn('No board yet; wait for first poll.'); return; }
-  const matters = parseMatters(mattersEl.value);
-  const threshold = Math.max(1, Number(thresholdEl.value) || 5);
-
-  if ('Notification' in window && Notification.permission === 'default') {
-    await Notification.requestPermission();
-  }
-  if (!('Notification' in window) || Notification.permission !== 'granted') {
-    alert('Enable notifications in your browser to see test alerts.');
-  }
-
-  // For each matter, find the pre-alert window and fire stepwise notifications (1s apart)
-  let delay = 0;
-  matters.forEach(m => {
-    const row = lastBoard.courts[m.court];
-    const seq = row ? row.sequence : [];
-    const windowList = preAlertWindow(seq, m.item, threshold);
-    windowList.forEach((itemNum, idx) => {
-      setTimeout(() => {
-        notify(`TEST • Court ${m.court}: Item ${itemNum}`,
-               `Approaching ${m.item}${row?.registration ? ' · ' + row.registration : ''}`);
-      }, delay + idx * 1000);
-    });
-    delay += windowList.length * 1000 + 500; // small gap before next matter’s test
-  });
-});
-
-
-// UI events & init
-saveBtn.addEventListener('click', () => {
+// --- UI events & init ---
+saveBtn.addEventListener('click', async () => {
+  ensureAudio();
   setStored({ matters: mattersEl.value, threshold: thresholdEl.value });
   fired.clear(); // reset dedupe when user changes list
 });
@@ -201,13 +240,52 @@ clearBtn.addEventListener('click', () => {
   alertsEl.innerHTML = '';
 });
 
+// Robust test: uses the latest real sequence; if not ready, fetch once
+testBtn.addEventListener('click', async () => {
+  ensureAudio();
+  const ok = await ensurePermission();
+  if (!ok) {
+    alert('Please allow notifications to test.');
+    return;
+  }
+
+  try {
+    if (!lastBoard) lastBoard = await fetchBoard();
+    const matters = parseMatters(mattersEl.value);
+    const threshold = Math.max(1, Number(thresholdEl.value) || 5);
+
+    // simulate stepwise notifications at 1s intervals
+    let delay = 0;
+    matters.forEach(m => {
+      const row = lastBoard.courts[m.court];
+      const seq = row ? row.sequence : [];
+      const windowList = preAlertWindow(seq, m.item, threshold);
+      const detail = row?.registration ? ` · ${row.registration}` : '';
+
+      windowList.forEach((num, idx) => {
+        setTimeout(() => {
+          notify(`TEST • Court ${m.court}: Item ${num}`, `Approaching ${m.item}${detail}`);
+        }, delay + idx * 1000);
+      });
+      delay += windowList.length * 1000 + 600;
+    });
+  } catch (e) {
+    console.error(e);
+    alert('Test failed. Try again after the page loads once.');
+  }
+});
+
 (function init() {
   const { matters, threshold } = getStored();
   mattersEl.value = matters;
   thresholdEl.value = threshold;
 
-  if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
+  // Prime audio on first user interaction for iOS/Android policies
+  document.addEventListener('click', ensureAudio, { once: true });
+
+  // Ask permission early so notifications can appear
+  ensurePermission();
+
+  // start polling
   loop();
 })();
